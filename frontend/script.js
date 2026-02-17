@@ -1,15 +1,45 @@
-// Dashboard JavaScript
+// Enhanced Dashboard with Tabs and Charts
 
-// Auto-refresh every 60 seconds (CoinGecko free tier allows ~10-50 requests/min)
 const AUTO_REFRESH_INTERVAL = 60000;
 let autoRefreshTimer = null;
+let charts = {};
 
 // Initialize dashboard on page load
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Dashboard initialized');
+    setupTabNavigation();
     refreshData();
     startAutoRefresh();
 });
+
+// Setup tab navigation
+function setupTabNavigation() {
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const tabName = button.getAttribute('data-tab');
+            
+            // Deactivate all tabs and contents
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            tabContents.forEach(content => content.classList.remove('active'));
+            
+            // Activate selected tab
+            button.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+            
+            // Refresh charts if dashboard tab opened
+            if (tabName === 'dashboard') {
+                setTimeout(() => {
+                    Object.values(charts).forEach(chart => {
+                        if (chart) chart.resize();
+                    });
+                }, 100);
+            }
+        });
+    });
+}
 
 // Refresh button click handler
 document.getElementById('refreshBtn').addEventListener('click', refreshData);
@@ -69,13 +99,216 @@ function updateDashboard(data) {
             const row = createTableRow(crypto);
             tableBody.appendChild(row);
         });
+        
+        // Update charts with new data
+        updateCharts(data.cryptos);
     } else {
         tableBody.innerHTML = '<tr class="empty-row"><td colspan="5">No data available</td></tr>';
     }
 
-    // Fetch and update stats and alerts
+    // Fetch and update stats and quality data
     fetchStats();
     fetchAndDisplayAlerts();
+    fetchAndDisplayQualityMetrics();
+}
+
+/**
+ * Update charts with new data
+ */
+function updateCharts(cryptos) {
+    if (!cryptos || cryptos.length === 0) return;
+
+    // Price Chart
+    updatePriceChart(cryptos);
+    
+    // Market Cap Chart
+    updateMarketCapChart(cryptos);
+    
+    // Change Chart
+    updateChangeChart(cryptos);
+    
+    // Quality Trend Chart
+    updateQualityTrendChart();
+}
+
+/**
+ * Update price comparison chart
+ */
+function updatePriceChart(cryptos) {
+    const ctx = document.getElementById('priceChart');
+    if (!ctx) return;
+
+    const labels = cryptos.map(c => c.name);
+    const prices = cryptos.map(c => c.price_usd || 0);
+
+    // Destroy existing chart
+    if (charts.priceChart) {
+        charts.priceChart.destroy();
+    }
+
+    charts.priceChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Price (USD)',
+                data: prices,
+                backgroundColor: 'rgba(102, 126, 234, 0.6)',
+                borderColor: 'rgba(102, 126, 234, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+/**
+ * Update market cap distribution chart
+ */
+function updateMarketCapChart(cryptos) {
+    const ctx = document.getElementById('marketCapChart');
+    if (!ctx) return;
+
+    const labels = cryptos.map(c => c.name);
+    const marketCaps = cryptos.map(c => c.market_cap_usd || 0);
+    const colors = ['#667eea', '#764ba2', '#f093fb', '#4facfe', '#43e97b'];
+
+    // Destroy existing chart
+    if (charts.marketCapChart) {
+        charts.marketCapChart.destroy();
+    }
+
+    charts.marketCapChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: marketCaps,
+                backgroundColor: colors.slice(0, labels.length),
+                borderColor: '#fff',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+}
+
+/**
+ * Update 24h change chart
+ */
+function updateChangeChart(cryptos) {
+    const ctx = document.getElementById('changeChart');
+    if (!ctx) return;
+
+    const labels = cryptos.map(c => c.name);
+    const changes = cryptos.map(c => c.change_24h_percent || 0);
+
+    // Destroy existing chart
+    if (charts.changeChart) {
+        charts.changeChart.destroy();
+    }
+
+    charts.changeChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '24h Change (%)',
+                data: changes,
+                borderColor: 'rgba(102, 126, 234, 1)',
+                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                tension: 0.4,
+                fill: true,
+                pointRadius: 5,
+                pointBackgroundColor: changes.map(v => v >= 0 ? '#28a745' : '#dc3545'),
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true
+                }
+            },
+            scales: {
+                y: {
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+/**
+ * Update quality trend chart (placeholder - would need historical data)
+ */
+function updateQualityTrendChart() {
+    const ctx = document.getElementById('qualityTrendChart');
+    if (!ctx) return;
+
+    // This would show historical quality scores if we have time-series data
+    // For now, just show a placeholder
+    if (charts.qualityTrendChart) {
+        charts.qualityTrendChart.destroy();
+    }
+
+    charts.qualityTrendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: ['Sample 1', 'Sample 2', 'Sample 3'],
+            datasets: [{
+                label: 'Quality Score',
+                data: [95, 93, 92],
+                borderColor: '#28a745',
+                backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true
+                }
+            },
+            scales: {
+                y: {
+                    min: 0,
+                    max: 100
+                }
+            }
+        }
+    });
 }
 
 /**
@@ -150,10 +383,11 @@ async function fetchAndDisplayAlerts() {
 }
 
 /**
- * Display quality alerts on dashboard
+ * Display quality alerts
  */
 function displayAlerts(alerts) {
     const alertsSection = document.getElementById('alertsSection');
+    const noAlertsSection = document.getElementById('noAlertsSection');
     const alertsList = document.getElementById('alertsList');
     
     alertsList.innerHTML = '';
@@ -176,6 +410,7 @@ function displayAlerts(alerts) {
     });
     
     alertsSection.style.display = 'block';
+    noAlertsSection.style.display = 'none';
 }
 
 /**
@@ -183,7 +418,65 @@ function displayAlerts(alerts) {
  */
 function hideAlerts() {
     const alertsSection = document.getElementById('alertsSection');
+    const noAlertsSection = document.getElementById('noAlertsSection');
     alertsSection.style.display = 'none';
+    noAlertsSection.style.display = 'block';
+}
+
+/**
+ * Fetch and display quality metrics
+ */
+async function fetchAndDisplayQualityMetrics() {
+    try {
+        const response = await fetch('/api/quality/metrics');
+        const result = await response.json();
+        
+        if (result.metrics) {
+            displayQualityMetrics(result.metrics);
+        }
+    } catch (error) {
+        console.warn('Could not fetch quality metrics:', error);
+    }
+}
+
+/**
+ * Display quality metrics grid
+ */
+function displayQualityMetrics(metrics) {
+    const grid = document.getElementById('qualityMetricsGrid');
+    grid.innerHTML = '';
+    
+    if (typeof metrics === 'object') {
+        Object.values(metrics).forEach(metric => {
+            const card = document.createElement('div');
+            card.className = 'quality-metric-card';
+            
+            const qualityClass = metric.quality_score >= 80 ? 'good' : 
+                               metric.quality_score >= 60 ? 'warning' : 'critical';
+            
+            card.innerHTML = `
+                <h4>${metric.crypto}</h4>
+                <div class="metric-row">
+                    <span class="metric-label">Quality Score</span>
+                    <span class="metric-value ${qualityClass}">${metric.quality_score.toFixed(1)}%</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Null Rate</span>
+                    <span class="metric-value">${metric.null_rate.toFixed(1)}%</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Duplicate Rate</span>
+                    <span class="metric-value">${metric.duplicate_rate.toFixed(1)}%</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Valid Records</span>
+                    <span class="metric-value">${metric.total_records - metric.null_count}</span>
+                </div>
+            `;
+            
+            grid.appendChild(card);
+        });
+    }
 }
 
 /**
