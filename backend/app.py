@@ -1,11 +1,13 @@
 """Flask application for real-time data streaming dashboard."""
 import logging
 import os
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request
 from datetime import datetime, timedelta
 from backend.config import current_config
 from backend.data_ingestion import CoinGeckoIngester
 from backend.transformations import DataTransformer
+from backend.quality_monitoring import QualityMonitor
+from backend.quality_database import QualityDatabase
 
 # Setup logging
 os.makedirs('./logs', exist_ok=True)
@@ -31,6 +33,8 @@ app.config.from_object(current_config)
 # Initialize components
 ingester = CoinGeckoIngester(current_config.COINGECKO_API_URL, current_config.CRYPTOS)
 transformer = DataTransformer(current_config)
+quality_monitor = QualityMonitor()
+quality_db = QualityDatabase()
 
 # In-memory cache for latest data
 cache = {
@@ -84,6 +88,17 @@ def refresh_data():
             # Transform data
             transformed_data = transformer.transform_market_data(raw_data)
             
+            # Monitor data quality
+            quality_monitor.ingest_data(raw_data)
+            
+            # Store quality metrics
+            metrics = quality_monitor.get_metrics()
+            quality_db.store_metrics(metrics)
+            
+            # Store any new alerts
+            for alert in quality_monitor.get_active_alerts():
+                quality_db.store_alert(alert)
+            
             # Update cache with expiry time
             cache['latest_data'] = transformed_data
             cache['last_update'] = datetime.utcnow().isoformat()
@@ -118,16 +133,118 @@ def refresh_data():
 def health_check():
     """Health check endpoint."""
     ingester_status = ingester.get_status()
+    quality_status = quality_monitor.get_status_summary()
+    
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat(),
         'ingester': ingester_status,
+        'quality': quality_status,
         'cache': {
             'has_data': cache['latest_data'] is not None,
             'last_update': cache['last_update'],
             'update_count': cache['update_count'],
             'error_count': cache['error_count']
         }
+    }), 200
+
+
+@app.route('/api/quality/metrics')
+def get_quality_metrics():
+    """Get current quality metrics for all cryptocurrencies."""
+    crypto = request.args.get('crypto')
+    metrics = quality_monitor.get_metrics(crypto)
+    return jsonify({
+        'metrics': metrics,
+        'timestamp': datetime.utcnow().isoformat()
+    }), 200
+
+
+@app.route('/api/quality/alerts')
+def get_quality_alerts():
+    """Get active quality alerts."""
+    alerts_type = request.args.get('type', 'active')  # 'active', 'history'
+    
+    if alerts_type == 'history':
+        limit = request.args.get('limit', 100, type=int)
+        alerts = quality_db.get_alert_history(limit)
+    else:
+        alerts = quality_db.get_active_alerts()
+    
+    return jsonify({
+        'alerts': alerts,
+        'count': len(alerts),
+        'timestamp': datetime.utcnow().isoformat()
+    }), 200
+
+
+@app.route('/api/quality/alerts/<alert_id>', methods=['POST'])
+def resolve_quality_alert(alert_id):
+    """Resolve a quality alert."""
+    try:
+        quality_db.resolve_alert(alert_id)
+        quality_monitor.resolve_alert(alert_id)
+        return jsonify({
+            'status': 'success',
+            'message': f'Alert {alert_id} resolved'
+        }), 200
+    except Exception as e:
+        logger.error(f"Error resolving alert: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+
+@app.route('/api/quality/thresholds', methods=['GET', 'POST'])
+def manage_thresholds():
+    """Get or update quality thresholds."""
+    if request.method == 'GET':
+        thresholds = quality_monitor.thresholds
+        return jsonify({
+            'thresholds': thresholds,
+            'timestamp': datetime.utcnow().isoformat()
+        }), 200
+    
+    elif request.method == 'POST':
+        try:
+            data = request.get_json()
+            metric = data.get('metric')
+            value = data.get('value')
+            
+            if not metric or value is None:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'metric and value required'
+                }), 400
+            
+            quality_monitor.set_threshold(metric, value)
+            quality_db.store_threshold(metric, value)
+            
+            return jsonify({
+                'status': 'success',
+                'message': f'Threshold updated: {metric} = {value}'
+            }), 200
+        except Exception as e:
+            logger.error(f"Error updating threshold: {str(e)}")
+            return jsonify({
+                'status': 'error',
+                'message': str(e)
+            }), 500
+
+
+@app.route('/api/quality/summary')
+def get_quality_summary():
+    """Get quality monitoring summary."""
+    db_summary = quality_db.get_summary_stats()
+    monitor_summary = quality_monitor.get_status_summary()
+    
+    # Merge summaries
+    summary = {**db_summary, **monitor_summary}
+    
+    return jsonify({
+        'summary': summary,
+        'timestamp': datetime.utcnow().isoformat()
     }), 200
 
 
