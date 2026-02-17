@@ -73,8 +73,9 @@ function updateDashboard(data) {
         tableBody.innerHTML = '<tr class="empty-row"><td colspan="5">No data available</td></tr>';
     }
 
-    // Fetch and update stats
+    // Fetch and update stats and alerts
     fetchStats();
+    fetchAndDisplayAlerts();
 }
 
 /**
@@ -127,6 +128,62 @@ function updateStatus(status, message) {
     const statusEl = document.getElementById('status');
     statusEl.className = `status-indicator ${status}`;
     statusEl.title = message;
+}
+
+/**
+ * Fetch and display quality alerts
+ */
+async function fetchAndDisplayAlerts() {
+    try {
+        const response = await fetch('/api/quality/alerts?type=active');
+        const result = await response.json();
+        
+        if (result.alerts && result.alerts.length > 0) {
+            displayAlerts(result.alerts);
+        } else {
+            hideAlerts();
+        }
+    } catch (error) {
+        console.warn('Could not fetch alerts:', error);
+        hideAlerts();
+    }
+}
+
+/**
+ * Display quality alerts on dashboard
+ */
+function displayAlerts(alerts) {
+    const alertsSection = document.getElementById('alertsSection');
+    const alertsList = document.getElementById('alertsList');
+    
+    alertsList.innerHTML = '';
+    
+    alerts.forEach(alert => {
+        const alertEl = document.createElement('div');
+        alertEl.className = `alert-item ${alert.severity || 'warning'}`;
+        
+        alertEl.innerHTML = `
+            <div class="alert-content">
+                <div class="alert-message">${alert.message}</div>
+                <div class="alert-meta">
+                    <strong>${alert.crypto}</strong> • 
+                    <span class="alert-badge ${alert.severity || 'warning'}">${(alert.alert_type || 'unknown').toUpperCase()}</span>
+                </div>
+            </div>
+        `;
+        
+        alertsList.appendChild(alertEl);
+    });
+    
+    alertsSection.style.display = 'block';
+}
+
+/**
+ * Hide quality alerts section
+ */
+function hideAlerts() {
+    const alertsSection = document.getElementById('alertsSection');
+    alertsSection.style.display = 'none';
 }
 
 /**
