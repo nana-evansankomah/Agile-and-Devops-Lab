@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Real-Time Crypto Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="container">
@@ -21,48 +22,95 @@
             </div>
         </div>
 
-        <div id="alertsSection" class="alerts-section" style="display: none;">
-            <h3>⚠️ Data Quality Alerts</h3>
-            <div id="alertsList" class="alerts-list"></div>
+        <!-- Tab Navigation -->
+        <div class="tab-navigation">
+            <button class="tab-btn active" data-tab="dashboard">📈 Dashboard</button>
+            <button class="tab-btn" data-tab="quality">✓ Data Quality</button>
+            <button class="tab-btn" data-tab="details">📋 Details</button>
         </div>
 
-        <div class="stats-container">
-            <div class="stat-card">
-                <h3>Total Cryptos</h3>
-                <p id="totalCount" class="stat-value">0</p>
+        <!-- Dashboard Tab -->
+        <div id="dashboard" class="tab-content active">
+            <div class="stats-container">
+                <div class="stat-card">
+                    <h3>Total Cryptos</h3>
+                    <p id="totalCount" class="stat-value">0</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Valid Records</h3>
+                    <p id="validCount" class="stat-value">0</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Data Quality</h3>
+                    <p id="qualityScore" class="stat-value">0%</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Updates</h3>
+                    <p id="updateCount" class="stat-value">0</p>
+                </div>
             </div>
-            <div class="stat-card">
-                <h3>Valid Records</h3>
-                <p id="validCount" class="stat-value">0</p>
+
+            <div class="charts-container">
+                <div class="chart-box">
+                    <h3>Price Comparison (USD)</h3>
+                    <canvas id="priceChart"></canvas>
+                </div>
+                <div class="chart-box">
+                    <h3>Market Cap Distribution</h3>
+                    <canvas id="marketCapChart"></canvas>
+                </div>
             </div>
-            <div class="stat-card">
-                <h3>Data Quality</h3>
-                <p id="qualityScore" class="stat-value">0%</p>
-            </div>
-            <div class="stat-card">
-                <h3>Updates</h3>
-                <p id="updateCount" class="stat-value">0</p>
+
+            <div class="chart-wide">
+                <h3>24h Price Change (%)</h3>
+                <canvas id="changeChart"></canvas>
             </div>
         </div>
 
-        <div class="data-container">
-            <h2>Cryptocurrency Prices</h2>
-            <table id="dataTable" class="data-table">
-                <thead>
-                    <tr>
-                        <th>Cryptocurrency</th>
-                        <th>Price (USD)</th>
-                        <th>Market Cap (USD)</th>
-                        <th>24h Volume (USD)</th>
-                        <th>24h Change (%)</th>
-                    </tr>
-                </thead>
-                <tbody id="tableBody">
-                    <tr class="empty-row">
-                        <td colspan="5">No data available</td>
-                    </tr>
-                </tbody>
-            </table>
+        <!-- Data Quality Tab -->
+        <div id="quality" class="tab-content">
+            <div id="alertsSection" class="alerts-section" style="display: none;">
+                <h3>⚠️ Active Alerts</h3>
+                <div id="alertsList" class="alerts-list"></div>
+            </div>
+
+            <div id="noAlertsSection" class="no-alerts" style="display: block;">
+                <h3>✅ All Clear!</h3>
+                <p>No data quality alerts. All metrics are within acceptable thresholds.</p>
+            </div>
+
+            <div class="quality-metrics-container">
+                <h3>Quality Metrics by Cryptocurrency</h3>
+                <div id="qualityMetricsGrid" class="quality-metrics-grid"></div>
+            </div>
+
+            <div class="chart-wide">
+                <h3>Quality Scores Over Time</h3>
+                <canvas id="qualityTrendChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Details Tab -->
+        <div id="details" class="tab-content">
+            <div class="data-container">
+                <h2>Cryptocurrency Prices</h2>
+                <table id="dataTable" class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Cryptocurrency</th>
+                            <th>Price (USD)</th>
+                            <th>Market Cap (USD)</th>
+                            <th>24h Volume (USD)</th>
+                            <th>24h Change (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <tr class="empty-row">
+                            <td colspan="5">No data available</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <footer>
