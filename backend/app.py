@@ -8,6 +8,7 @@ from backend.data_ingestion import CoinGeckoIngester
 from backend.transformations import DataTransformer
 from backend.quality_monitoring import QualityMonitor
 from backend.quality_database import QualityDatabase
+from backend.monitoring import PerformanceMonitor, MonitoringDatabase, PerformanceMetrics
 
 # Setup logging
 os.makedirs('./logs', exist_ok=True)
@@ -35,6 +36,10 @@ ingester = CoinGeckoIngester(current_config.COINGECKO_API_URL, current_config.CR
 transformer = DataTransformer(current_config)
 quality_monitor = QualityMonitor()
 quality_db = QualityDatabase()
+
+# Initialize monitoring components
+performance_monitor = PerformanceMonitor()
+monitoring_db = MonitoringDatabase()
 
 # In-memory cache for latest data
 cache = {
@@ -71,10 +76,17 @@ def get_data():
 @app.route('/api/refresh')
 def refresh_data():
     """API endpoint to manually refresh data."""
+    # Start performance tracking
+    metric = PerformanceMetrics('api_refresh')
+    metric.start()
+    
     try:
         # Check if cache is still valid
         if cache['cache_expiry'] and datetime.utcnow() < cache['cache_expiry']:
             logger.info("Returning cached data (cache not yet expired)")
+            metric.end(status='success')
+            performance_monitor.record_operation(metric)
+            monitoring_db.store_metric(metric)
             return jsonify({
                 'status': 'success',
                 'message': 'Returning cached data (API rate limit protection)',
@@ -107,6 +119,11 @@ def refresh_data():
             
             logger.info(f"Data refreshed successfully. Valid records: {transformed_data['summary']['valid_count']}")
             
+            # Record successful operation
+            metric.end(status='success')
+            performance_monitor.record_operation(metric)
+            monitoring_db.store_metric(metric)
+            
             return jsonify({
                 'status': 'success',
                 'message': f"Fetched {transformed_data['summary']['valid_count']} cryptocurrencies",
@@ -115,6 +132,9 @@ def refresh_data():
         else:
             cache['error_count'] += 1
             logger.error("Failed to fetch market data")
+            metric.end(status='error', error_msg='Failed to fetch market data from CoinGecko')
+            performance_monitor.record_operation(metric)
+            monitoring_db.store_metric(metric)
             return jsonify({
                 'status': 'error',
                 'message': 'Failed to fetch market data from CoinGecko'
@@ -123,6 +143,9 @@ def refresh_data():
     except Exception as e:
         cache['error_count'] += 1
         logger.error(f"Error in refresh_data: {str(e)}")
+        metric.end(status='error', error_msg=str(e))
+        performance_monitor.record_operation(metric)
+        monitoring_db.store_metric(metric)
         return jsonify({
             'status': 'error',
             'message': str(e)
@@ -131,15 +154,27 @@ def refresh_data():
 
 @app.route('/api/health')
 def health_check():
-    """Health check endpoint."""
+    """Health check endpoint with monitoring data."""
     ingester_status = ingester.get_status()
     quality_status = quality_monitor.get_status_summary()
+    monitoring_summary = performance_monitor.get_metrics_summary()
+    
+    # Determine overall health status
+    overall_error_rate = monitoring_summary.get('overall_error_rate', 0)
+    health_status = 'healthy' if overall_error_rate < 10 else ('degraded' if overall_error_rate < 25 else 'unhealthy')
     
     return jsonify({
-        'status': 'healthy',
+        'status': health_status,
         'timestamp': datetime.utcnow().isoformat(),
         'ingester': ingester_status,
         'quality': quality_status,
+        'monitoring': {
+            'error_rate': monitoring_summary.get('overall_error_rate', 0),
+            'latency_ms': monitoring_summary.get('overall_latency_ms', 0),
+            'throughput_ops_sec': monitoring_summary.get('overall_throughput_ops_sec', 0),
+            'total_operations': monitoring_summary.get('total_operations', 0),
+            'total_errors': monitoring_summary.get('total_errors', 0)
+        },
         'cache': {
             'has_data': cache['latest_data'] is not None,
             'last_update': cache['last_update'],
@@ -244,6 +279,72 @@ def get_quality_summary():
     
     return jsonify({
         'summary': summary,
+        'timestamp': datetime.utcnow().isoformat()
+    }), 200
+
+
+@app.route('/api/monitoring/metrics')
+def get_monitoring_metrics():
+    """API endpoint to get performance monitoring metrics."""
+    operation = request.args.get('operation')
+    
+    if operation:
+        # Get metrics for specific operation
+        all_metrics = performance_monitor.get_metrics_summary()
+        operation_metrics = all_metrics.get('operations', {}).get(operation)
+        
+        if operation_metrics:
+            return jsonify({
+                'operation': operation,
+                'metrics': operation_metrics,
+                'timestamp': datetime.utcnow().isoformat()
+            }), 200
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': f'No metrics found for operation: {operation}'
+            }), 404
+    else:
+        # Return overall metrics
+        metrics = performance_monitor.get_metrics_summary()
+        return jsonify({
+            'metrics': metrics,
+            'timestamp': datetime.utcnow().isoformat()
+        }), 200
+
+
+@app.route('/api/monitoring/health')
+def get_monitoring_health():
+    """API endpoint to get system health with monitoring data."""
+    summary = performance_monitor.get_metrics_summary()
+    
+    # Determine health status based on error rate
+    error_rate = summary.get('overall_error_rate', 0)
+    if error_rate < 5:
+        health_status = 'excellent'
+    elif error_rate < 10:
+        health_status = 'healthy'
+    elif error_rate < 25:
+        health_status = 'degraded'
+    else:
+        health_status = 'unhealthy'
+    
+    return jsonify({
+        'status': health_status,
+        'monitoring': summary,
+        'timestamp': datetime.utcnow().isoformat()
+    }), 200
+
+
+@app.route('/api/monitoring/operations')
+def get_monitoring_operations():
+    """API endpoint to get metrics for all tracked operations."""
+    metrics = performance_monitor.get_metrics_summary()
+    operations = metrics.get('operations', {})
+    
+    return jsonify({
+        'operations': operations,
+        'operation_count': len(operations),
         'timestamp': datetime.utcnow().isoformat()
     }), 200
 
