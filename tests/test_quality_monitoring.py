@@ -218,6 +218,46 @@ class TestQualityMonitor:
         for crypto in cryptos:
             assert crypto in monitor.metrics
 
+    def test_ingest_coingecko_payload_shape(self, monitor):
+        """Test ingestion supports raw CoinGecko response keys."""
+        data = {
+            '_metadata': {
+                'timestamp': datetime.utcnow().isoformat(),
+                'source': 'CoinGecko'
+            },
+            'bitcoin': {
+                'usd': 45000,
+                'usd_market_cap': 880000000000,
+                'usd_24h_vol': 25000000000
+            }
+        }
+
+        monitor.ingest_data(data)
+        metrics = monitor.get_metrics('bitcoin')
+
+        assert metrics['total_records'] == 1
+        assert metrics['null_count'] == 0
+        assert metrics['quality_score'] == 100.0
+
+    def test_ingest_ignores_metadata_records(self, monitor):
+        """Test metadata keys are ignored and not tracked as cryptocurrencies."""
+        data = {
+            '_metadata': {'source': 'CoinGecko'},
+            '_system': {'trace_id': 'abc-123'},
+            'ethereum': {
+                'usd': 2500,
+                'usd_market_cap': 300000000000,
+                'usd_24h_vol': 12000000000
+            }
+        }
+
+        monitor.ingest_data(data)
+        all_metrics = monitor.get_metrics()
+
+        assert 'ethereum' in all_metrics
+        assert '_metadata' not in all_metrics
+        assert '_system' not in all_metrics
+
 
 class TestQualityAlert:
     """Test suite for QualityAlert class"""

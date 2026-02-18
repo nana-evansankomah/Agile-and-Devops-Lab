@@ -75,7 +75,7 @@ pip install -r requirements.txt
 
 4. Run the application:
 ```bash
-python backend/app.py
+python run.py
 ```
 
 5. Open your browser and go to:
@@ -91,12 +91,12 @@ pytest tests/ -v --cov=backend
 
 ## CI/CD Pipeline
 
-The project uses GitHub Actions for continuous integration and deployment. Every push to the main branch will:
-- Run automated tests
-- Check code quality
-- Deploy to staging (if tests pass)
+The project uses GitHub Actions for continuous integration and deployment. Every push and pull request triggers:
+- `quick-checks.yml`: fast lint + unit checks
+- `integration-smoke.yml`: integration tests + startup smoke check
+- `ci.yml`: full matrix tests + coverage + build smoke
 
-See `.github/workflows/ci.yml` for pipeline configuration.
+See `.github/workflows/` for all pipeline configurations.
 
 ## Data Source
 

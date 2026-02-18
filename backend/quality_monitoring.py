@@ -138,6 +138,16 @@ class QualityMonitor:
         metrics_list = []
         
         for crypto, data in crypto_data.items():
+            # Skip metadata/system keys in raw payloads.
+            if crypto.startswith('_'):
+                continue
+
+            if not isinstance(data, dict):
+                logger.warning(f"Skipping invalid payload for {crypto}: expected dict")
+                continue
+
+            normalized_data = self._normalize_input_record(data)
+
             if crypto not in self.metrics:
                 self.metrics[crypto] = QualityMetrics(crypto)
             
@@ -148,7 +158,8 @@ class QualityMonitor:
             # Track null values
             required_fields = ['price', 'market_cap', 'volume_24h']
             for field in required_fields:
-                if not data.get(field):
+                # Use explicit None check so numeric zero values are not treated as missing.
+                if normalized_data.get(field) is None:
                     metrics.null_count += 1
             
             # Check for late arrivals (data older than 5 minutes)
@@ -165,6 +176,24 @@ class QualityMonitor:
             metrics_list.append(metrics)
         
         return metrics_list[-1] if metrics_list else None
+
+    @staticmethod
+    def _normalize_input_record(data: Dict) -> Dict:
+        """Normalize incoming record keys from internal or CoinGecko raw payloads."""
+        # Raw CoinGecko keys
+        if 'usd' in data or 'usd_market_cap' in data or 'usd_24h_vol' in data:
+            return {
+                'price': data.get('usd'),
+                'market_cap': data.get('usd_market_cap'),
+                'volume_24h': data.get('usd_24h_vol')
+            }
+
+        # Internal canonical keys
+        return {
+            'price': data.get('price'),
+            'market_cap': data.get('market_cap'),
+            'volume_24h': data.get('volume_24h')
+        }
     
     def _check_thresholds(self, crypto: str, metrics: QualityMetrics):
         """Check metrics against thresholds and trigger alerts"""
