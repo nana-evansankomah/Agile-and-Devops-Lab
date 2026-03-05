@@ -53,7 +53,7 @@ A real-time data streaming platform that ingests cryptocurrency data from CoinGe
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/evans-ankomah/Agile-and-Devops-Lab.git
+git clone https://github.com/nana-evansankomah/Agile-and-Devops-Lab.git
 cd Agile-and-Devops-Lab
 ```
 

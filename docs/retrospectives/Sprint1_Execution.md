@@ -153,7 +153,7 @@ ab67e7b feat: Backend configuration and initialization
 ```
 
 **Commit Style:** Conventional Commits (feat, test, ci, etc.)  
-**Push Status:** ✅ All commits pushed to GitHub (evans-ankomah/Agile-and-Devops-Lab)
+**Push Status:** ✅ All commits pushed to GitHub (nana-evansankomah/Agile-and-Devops-Lab)
 
 ---
 
@@ -430,7 +430,7 @@ Based on Sprint 1 completion and retrospective, Sprint 2 will include:
 
 ## Evidence & Links
 
-- **GitHub Repository:** https://github.com/evans-ankomah/Agile-and-Devops-Lab
+- **GitHub Repository:** https://github.com/nana-evansankomah/Agile-and-Devops-Lab
 - **CI/CD Pipeline:** `.github/workflows/ci.yml`
 - **Test Results:** Run `pytest tests/ -v --cov=backend`
 - **Application:** http://localhost:5000 (when running)
